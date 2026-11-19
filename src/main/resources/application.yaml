@@ -4,3 +4,31 @@ server:
 spring:
   application:
     name: agents
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    consumer:
+      group-id: dacs-agents
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 1
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        max.poll.interval.ms: ${AGENTS_MAX_POLL_INTERVAL_MS:1800000}
+    listener:
+      ack-mode: record
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+app:
+  kafka:
+    request-topic: DACS_agent_request
+    response-topic: DACS_agent_response
+    batch-size: ${AGENTS_BATCH_SIZE:50}
+  pii:
+    enabled: ${AGENTS_PII_ENABLED:false}
+    chunk-overlap-chars: ${AGENTS_PII_CHUNK_OVERLAP_CHARS:256}
+    max-scan-bytes: ${AGENTS_PII_MAX_SCAN_BYTES:104857600}
+    enabled-detectors: ${AGENTS_PII_ENABLED_DETECTORS:EMAIL,PHONE_RU,SNILS,INN_12,PASSPORT_RU}
