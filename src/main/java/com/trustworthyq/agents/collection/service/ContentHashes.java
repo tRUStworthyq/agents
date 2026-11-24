@@ -1,4 +1,4 @@
-package com.trustworthyq.agents.s3.service;
+package com.trustworthyq.agents.collection.service;
 
 import com.trustworthyq.agents.pii.service.PiiDetector;
 
@@ -10,8 +10,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-record ContentHashes(String sha256, String simhash) {
-    static ContentHashes read(InputStream input, long expectedBytes, PiiDetector detector, Timer timer) throws IOException {
+public record ContentHashes(String sha256, String simhash) {
+    public static ContentHashes read(InputStream input, long expectedBytes, PiiDetector detector, Timer timer) throws IOException {
+        return read(input, expectedBytes, detector, timer, null);
+    }
+
+    public static ContentHashes read(InputStream input, long expectedBytes, PiiDetector detector, Timer timer,
+                                     DocumentScanner scanner) throws IOException {
         MessageDigest sha256;
         try {
             sha256 = MessageDigest.getInstance("SHA-256");
@@ -26,6 +31,7 @@ record ContentHashes(String sha256, String simhash) {
         int count;
         while ((count = input.read(buffer)) != -1) {
             sha256.update(buffer, 0, count);
+            if (scanner != null) scanner.feed(buffer, count);
             if (detector != null) {
                 int length = count;
                 timer.record(() -> detector.feed(buffer, length));
@@ -38,7 +44,7 @@ record ContentHashes(String sha256, String simhash) {
             }
         }
         if (size != expectedBytes) {
-            throw new IOException("S3 object length changed during read");
+            throw new IOException("Object length changed during read");
         }
         if (size > 0 && size < Integer.BYTES) {
             vote(weights, (size << Integer.SIZE) | Integer.toUnsignedLong(window));

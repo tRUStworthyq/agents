@@ -1,5 +1,7 @@
 package com.trustworthyq.agents.s3.service;
 
+import com.trustworthyq.agents.collection.service.ContentHashes;
+
 import com.sun.net.httpserver.HttpServer;
 import com.trustworthyq.agents.collection.dto.ObjectMetadata;
 import com.trustworthyq.agents.pii.config.PiiProperties;

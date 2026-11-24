@@ -10,7 +10,7 @@ public record ObjectMetadata(String path, String extension, long sizeBytes, Inst
                       Instant modificationTime, Instant lastAccessTime, Owner owner,
                       List<AccessGrant> accessRights, String sha256, String simhash,
                       AccessStatistics accessStatistics,
-                      @JsonInclude(JsonInclude.Include.NON_NULL) PiiResult pii) {
+                      @JsonInclude(JsonInclude.Include.NON_NULL) PiiResult pii, DocumentEvidence documentEvidence) {
     public record Owner(String id, String displayName) {
     }
 

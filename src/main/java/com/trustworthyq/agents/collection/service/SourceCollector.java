@@ -9,5 +9,9 @@ import java.util.function.Consumer;
 public interface SourceCollector {
     UUID sourceId();
 
-    void collect(String config, Consumer<ObjectMetadata> output) throws IOException;
+    default void collect(String config, Consumer<ObjectMetadata> output) throws IOException {
+        collect(config, java.util.Map.of(), output);
+    }
+
+    void collect(String config, java.util.Map<UUID, String> contentRules, Consumer<ObjectMetadata> output) throws IOException;
 }

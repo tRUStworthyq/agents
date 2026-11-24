@@ -75,7 +75,7 @@ class CollectionListener {
 
         String error = null;
         try {
-            collector.collect(request.config(), output::add);
+            collector.collect(request.config(), request.contentRules() == null ? Map.of() : request.contentRules(), output::add);
         } catch (PublishException exception) {
             throw exception;
         } catch (IOException | RuntimeException exception) {

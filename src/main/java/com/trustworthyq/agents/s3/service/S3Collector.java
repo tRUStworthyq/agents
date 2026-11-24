@@ -2,6 +2,8 @@ package com.trustworthyq.agents.s3.service;
 
 import com.trustworthyq.agents.collection.dto.ObjectMetadata;
 import com.trustworthyq.agents.collection.exception.CollectionException;
+import com.trustworthyq.agents.collection.service.ContentHashes;
+import com.trustworthyq.agents.collection.service.DocumentScanner;
 import com.trustworthyq.agents.collection.service.SourceCollector;
 import com.trustworthyq.agents.s3.config.S3SourceConfig;
 import com.trustworthyq.agents.pii.service.PiiDetector;
@@ -27,6 +29,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.UUID;
+import java.util.Map;
 import java.util.function.Consumer;
 
 @Component
@@ -53,7 +56,7 @@ class S3Collector implements SourceCollector {
     }
 
     @Override
-    public void collect(String configJson, Consumer<ObjectMetadata> output) throws IOException {
+    public void collect(String configJson, Map<UUID, String> contentRules, Consumer<ObjectMetadata> output) throws IOException {
         S3SourceConfig config = json.readValue(configJson, S3SourceConfig.class);
         try (S3Client client = authenticate(config)) {
             var statistics = auditReader.read(client, config);
@@ -63,7 +66,7 @@ class S3Collector implements SourceCollector {
             for (S3Object object : objects) {
                 var access = config.auditLog() == null ? null : statistics.getOrDefault(
                         object.key(), new ObjectMetadata.AccessStatistics(0, null, config.auditLog().coverageStart(), config.auditLog().coverageEnd()));
-                output.accept(readObject(client, config.bucket(), object, access));
+                output.accept(readObject(client, config.bucket(), object, access, contentRules));
             }
         } catch (S3Exception exception) {
             throw new CollectionException("S3_HTTP_" + exception.statusCode(), exception);
@@ -86,17 +89,19 @@ class S3Collector implements SourceCollector {
     }
 
     private ObjectMetadata readObject(S3Client client, String bucket, S3Object object,
-                                      ObjectMetadata.AccessStatistics statistics) throws IOException {
+                                      ObjectMetadata.AccessStatistics statistics, Map<UUID, String> contentRules) throws IOException {
         ContentHashes hashes;
         PiiResult pii;
         String extension = extension(object.key());
         GetObjectResponse response;
+        DocumentScanner scanner;
         try (var body = client.getObject(request -> request.bucket(bucket).key(object.key()).ifMatch(object.eTag()))) {
             response = body.response();
+            scanner = new DocumentScanner(extension, response.contentType(), contentRules);
             var detector = piiProperties.enabled() ? new PiiDetector(piiProperties, extension, response.contentType()) : null;
             var sample = Timer.start(metrics);
             try {
-                hashes = ContentHashes.read(body, response.contentLength(), detector, piiTime);
+                hashes = ContentHashes.read(body, response.contentLength(), detector, piiTime, scanner);
                 pii = detector == null ? null : piiTime.record(detector::finish);
             } finally {
                 sample.stop(metrics.timer("dacs.s3.object.read", "pii", Boolean.toString(detector != null)));
@@ -129,7 +134,7 @@ class S3Collector implements SourceCollector {
                 owner == null || owner.id() == null || owner.id().isBlank() ? null
                         : new ObjectMetadata.Owner(owner.id(), owner.displayName()),
                 grants == null || (!acl.grants().isEmpty() && grants.isEmpty()) ? null : grants,
-                hashes.sha256(), hashes.simhash(), statistics, pii);
+                hashes.sha256(), hashes.simhash(), statistics, pii, scanner.finish(response.eTag()));
     }
 
     private GetObjectAclResponse readAcl(S3Client client, String bucket, String key, String versionId) {
